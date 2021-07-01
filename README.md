@@ -9,7 +9,7 @@ Main purpose of the code - to generate datasets of pairs "image - sequence" for 
 from data import Dumper
 Dumper("name.csv").dump()
 ```
-will generate image cach at `name_dump` and a file `name_result.csv`, containing target sequences and their pathcodes  
+will generate image cache at `name_dump` and a file `name_result.csv`, containing target sequences and their pathcodes  
 `name_fails.csv` contains list of failed molecules and the reasons  
 `name_grpcounter.lst` is a list of counted unique substituted groups   
 `smiles_test.csv` is an example of input smiles file.
