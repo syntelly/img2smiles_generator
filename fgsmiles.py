@@ -176,23 +176,31 @@ def Mol2FGSmiles (mol):
     
     return sm
 
-group_template = re.compile('\[(?:\w|\-|\(|\))+\]')
+group_template = re.compile('\[\S+?\]')
 dummy_templates = [re.compile('\[C\d+H\d+\]'), re.compile('\[OC\d+H\d+\]')]
+
+def bracket (grp):
+    return '['+grp+']'
 
 # this function converts FG-Smiles string to a valid Smiles string. Generic groups are replaced to `*`
 
 def FGSmiles2Smiles (fgsmiles):
-    for fg in re.findall(group_template, fgsmiles):
+    for fg in get_fgsmiles_groups(fgsmiles, allow_generic=True):
         if fg in _unpack_list_:
-            fgsmiles = fgsmiles.replace(fg, _unpack_dict_[fg])
+            fgsmiles = fgsmiles.replace(bracket(fg), _unpack_dict_[fg])
         
         if fg in _generic_names_:
-            fgsmiles = fgsmiles.replace(fg, '*')
+            fgsmiles = fgsmiles.replace(bracket(fg), '*')
         
         for tmpl in dummy_templates:
             fgsmiles = re.sub(tmpl, '*', fgsmiles)
+            
+    mol = Chem.MolFromSmiles(fgsmiles)
+    if mol is None:
+        raise Exception(f'Cannot convert {fgsmiles} into rdkit object')
     
-    return fgsmiles
+    smiles = Chem.MolToSmiles(mol)
+    return smiles
 
 # find all groups from our list in input string
 
@@ -202,6 +210,7 @@ def get_fgsmiles_groups (fgsmiles, allow_generic=False):
             return grp in _unpack_list_ or \
                 (grp[0] == 'v' and grp[1:] in _unpack_list_) or \
                 grp in _generic_names_ or \
+                (grp[0] == 'v' and grp[1:] in _generic_names_) or \
                 max([len(tmpl.findall(f'[{grp}]')) > 0 for tmpl in dummy_templates]) > 0
             
         return grp in _unpack_list_
@@ -214,7 +223,7 @@ def get_fgsmiles_groups (fgsmiles, allow_generic=False):
 # read fgsmiles to rdkit Mol object. It can be drawn and passed to Mol2FGSmiles
 
 def MolFromFGSmiles (fgsmiles):
-    groups = get_fgsmiles_groups(fgsmiles)
+    groups = get_fgsmiles_groups(fgsmiles, allow_generic=True)
 
     # replace each group entrance with incremental [U+3:n] replacement
     # store replace pairs to a dict
@@ -222,14 +231,15 @@ def MolFromFGSmiles (fgsmiles):
     smiles = fgsmiles
     counter = 0
     for grp in groups:
-        while grp in smiles:
+        while bracket(grp) in smiles:
             counter += 1
             subst_str = f'U+3:{counter}'
-            smiles = smiles.replace(grp, subst_str, 1)
+            smiles = smiles.replace(bracket(grp), bracket(subst_str), 1)
             subst_dict[subst_str] = grp
 
     # after replacing to U+3:n the string becomes a valid SMILES
     # can read it with RDKit
+    
     mol = Chem.MolFromSmiles(smiles)
     if mol is None: return None
 
@@ -240,7 +250,7 @@ def MolFromFGSmiles (fgsmiles):
             grp = subst_dict[symbol[1:-1]]
             a.SetProp("_displayLabel", grp)
             a.SetProp("_displayLabelW", mirror_label(grp))
-            a.SetProp("_fgsmilesLabel", f'[{grp}]')
+            a.SetProp("_fgsmilesLabel", bracket(grp))
             a.SetProp("_substLabel", symbol)
             
     return mol
